@@ -321,7 +321,7 @@ export default function ObjectRecognition() {
         </div>
 
         <div className="w-full h-[calc(100vh-21rem)] min-h-[400px]">
-          <div className="sticky top-20">
+          <div className="relative top-20">
             <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm mb-4">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
