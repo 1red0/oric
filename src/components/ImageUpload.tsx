@@ -101,7 +101,7 @@ export default function ImageUpload({
   const displayImage = processedImage ?? preview;
 
   return (
-    <div className="space-y-4 ">
+    <div className="space-y-4">
       <AnimatePresence mode="wait">
         {error && (
           <motion.div
@@ -134,12 +134,15 @@ export default function ImageUpload({
         {!displayImage ? (
           <motion.div
             {...dropzoneAnimation}
-            className="relative"
+            className="relative h-full"
           >
             <div
               {...getRootProps()}
-              className={`relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-300
-                ${isDragging ? 'border-[#4B5320] bg-[#4B5320]/10 scale-102 shadow-lg' : 'border-gray-300 hover:border-[#4B5320] hover:scale-[1.02] hover:shadow-md'}`}
+              className={`relative h-full flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-all duration-200 bg-white/80 backdrop-blur-sm z-10 ${
+                isDragging
+                  ? 'border-[#4B5320] bg-[#4B5320]/5'
+                  : 'border-gray-300 hover:border-[#4B5320]/50'
+              } ${isProcessed ? 'border-none p-0' : ''}`}
             >
               <input {...getInputProps()} />
               <motion.div

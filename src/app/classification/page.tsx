@@ -103,7 +103,7 @@ export default function ImageClassification() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 p-2 sm:p-4 h-[calc(100vh-20rem)]">
-        <div className="w-full h-[calc(100vh-24rem)] min-h-[400px] flex flex-col">
+        <div className="w-full h-[calc(100vh-24rem)] min-h-[400px] flex flex-col items-center justify-center">
           <ImageUpload 
             onImageSelect={handleImageSelect}
             isProcessed={!!predictions || hasNoClassifications}

@@ -46,7 +46,7 @@ const ModelOption = memo(({
       </span>
     )}
     <span className="ml-auto text-sm text-gray-500">
-      {model.provider === 'tensorflow' ? 'TensorFlow.js' : 'Hugging Face'}
+    &nbsp;{model.provider === 'tensorflow' ? 'TensorFlow.js' : 'Hugging Face'}
     </span>
   </motion.div>
 ));
@@ -59,7 +59,7 @@ function ModelSelector({
   onModelChange,
 }: ModelSelectorProps): ReactElement {
   return (
-    <div className="w-full">
+    <div className="w-full min-w-[300px] relative z-[100]">
       <Listbox value={selectedModel} onChange={onModelChange}>
         {({ open }) => (
           <div className="relative mt-1">
@@ -81,7 +81,7 @@ function ModelSelector({
               leaveFrom="opacity-100"
               leaveTo="opacity-0"
             >
-              <ListboxOptions className="absolute z-10 mt-2 max-h-60 w-full overflow-auto rounded-lg bg-white py-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
+              <ListboxOptions className="absolute z-[100] mt-2 max-h-60 w-full overflow-auto rounded-lg bg-white py-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
                 {models.map((model) => (
                   <ListboxOption
                     key={model.id}

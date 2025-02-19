@@ -2,6 +2,7 @@ import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { HfInference } from '@huggingface/inference';
 import * as tf from '@tensorflow/tfjs';
+import { preprocessImage } from './image-processing';
 
 let mobilenetModel: mobilenet.MobileNet | null = null;
 let cocoSsdModel: cocoSsd.ObjectDetection | null = null;
@@ -14,24 +15,24 @@ export const models = {
   classification: [
     {
       id: 'mobilenet',
-      name: 'MobileNet v2 (TensorFlow.js)',
+      name: 'MobileNet',
       provider: 'tensorflow' as const,
     },
     {
       id: 'microsoft/resnet-50',
-      name: 'ResNet-50 (Hugging Face)',
+      name: 'ResNet-50 ',
       provider: 'huggingface' as const,
     },
   ],
   recognition: [
     {
       id: 'coco-ssd',
-      name: 'COCO-SSD (TensorFlow.js)',
+      name: 'COCO-SSD',
       provider: 'tensorflow' as const,
     },
     {
       id: 'facebook/detr-resnet-50',
-      name: 'DETR (Hugging Face)',
+      name: 'DETR ',
       provider: 'huggingface' as const,
     },
   ],
@@ -107,15 +108,26 @@ export async function classifyImage(
   hfToken?: string
 ) {
   try {
+    // Pre-process image with classification-specific enhancements
+    const processedImage = await preprocessImage(image, {
+      maxSize: 1024,
+      minSize: 224,
+      quality: 0.9,
+      task: 'classification',
+      enhanceContrast: true,
+      denoise: true,
+      sharpen: true
+    });
+
     if (modelId === 'mobilenet') {
       const model = await loadMobilenet();
-      return await model.classify(image);
+      return await model.classify(processedImage.element);
     } else if (modelId === 'microsoft/resnet-50') {
       if (!hfToken) throw new Error('Hugging Face token is required');
       const hf = new HfInference(hfToken);
       const response = await hf.imageClassification({
         model: modelId,
-        data: image.src,
+        data: processedImage.dataUrl,
       });
       return response.map(({ label, score }) => ({
         className: label,
@@ -126,6 +138,40 @@ export async function classifyImage(
   } catch (error) {
     throw new Error(`Classification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+}
+
+async function detectWithCocoSsd(processedImage: { element: HTMLImageElement }) {
+  const model = await loadCocoSsd();
+  const results = await model.detect(processedImage.element);
+  return results.filter(result => result.score > 0.35);
+}
+
+async function detectWithHuggingFace(
+  modelId: string,
+  processedImage: { dataUrl: string },
+  hfToken: string
+) {
+  if (!hfToken?.trim() || !hfToken.startsWith('hf_')) {
+    throw new Error('Invalid Hugging Face token format. Token should start with "hf_".');
+  }
+
+  const hf = new HfInference(hfToken);
+  const response = await hf.objectDetection({
+    model: modelId,
+    data: processedImage.dataUrl,
+  });
+
+  if (!response || !Array.isArray(response)) {
+    throw new Error('Invalid response from Hugging Face API');
+  }
+
+  return response
+    .filter(det => det.score > 0.35)
+    .map(({ label, score, box }) => ({
+      class: label,
+      score,
+      bbox: [box.xmin, box.ymin, box.xmax - box.xmin, box.ymax - box.ymin],
+    }));
 }
 
 export async function detectObjects(
@@ -139,90 +185,35 @@ export async function detectObjects(
 
   try {
     isModelLoading = true;
-
-    // Ensure image is loaded
-    if (!image.complete) {
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = reject;
-      });
-    }
-
-    // Pre-process image if needed
-    const processedImage = await preprocessImage(image);
+    const processedImage = await preprocessImage(image, {
+      maxSize: 1024,
+      minSize: 224,
+      quality: 0.9,
+      task: 'detection',
+      enhanceContrast: true,
+      denoise: true,
+      sharpen: true,
+      provider: modelId.includes('facebook/') || modelId.includes('microsoft/') ? 'huggingface' : undefined
+    });
 
     if (modelId === 'coco-ssd') {
-      const model = await loadCocoSsd();
-      const results = await model.detect(processedImage);
-      
-      // Filter out low confidence recognitions
-      return results.filter(result => result.score > 0.35);
-    } else if (modelId === 'facebook/detr-resnet-50') {
-      if (!hfToken) throw new Error('Hugging Face token is required');
-      const hf = new HfInference(hfToken);
-      const response = await hf.objectDetection({
-        model: modelId,
-        data: processedImage.src,
-      });
-      return response
-        .filter(det => det.score > 0.35)
-        .map(({ label, score, box }) => ({
-          class: label,
-          score,
-          bbox: [box.xmin, box.ymin, box.xmax - box.xmin, box.ymax - box.ymin],
-        }));
+      return await detectWithCocoSsd(processedImage);
+    } 
+    
+    if (modelId === 'facebook/detr-resnet-50') {
+      if (!hfToken) {
+        throw new Error('Hugging Face token is missing. Please check your .env.local file.');
+      }
+      return await detectWithHuggingFace(modelId, processedImage, hfToken);
     }
+
     throw new Error(`Unsupported model: ${modelId}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Object recognition failed: ${errorMessage}. Please try again or choose a different model.`);
+    throw new Error(`Object recognition failed: ${errorMessage}`);
   } finally {
     isModelLoading = false;
   }
-}
-
-async function preprocessImage(image: HTMLImageElement): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        throw new Error('Could not get canvas context');
-      }
-
-      // Set reasonable maximum dimensions
-      const MAX_SIZE = 1024;
-      let width = image.naturalWidth;
-      let height = image.naturalHeight;
-
-      // Scale down if image is too large
-      if (width > MAX_SIZE || height > MAX_SIZE) {
-        if (width > height) {
-          height = (height * MAX_SIZE) / width;
-          width = MAX_SIZE;
-        } else {
-          width = (width * MAX_SIZE) / height;
-          height = MAX_SIZE;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw and process image
-      ctx.drawImage(image, 0, 0, width, height);
-      
-      const processedImage = new Image();
-      processedImage.crossOrigin = 'anonymous';
-      processedImage.src = canvas.toDataURL('image/jpeg', 0.9);
-
-      processedImage.onload = () => resolve(processedImage);
-      processedImage.onerror = reject;
-    } catch (error) {
-      reject(new Error(error instanceof Error ? error.message : 'Unknown error'));
-    }
-  });
 }
 
 export function drawRecognitions(

@@ -17,6 +17,26 @@ interface Recognition {
   score: number;
 }
 
+// Add these interfaces at the top of the file, after the Recognition interface
+interface CanvasDimensions {
+  width: number;
+  height: number;
+}
+
+interface ScalingParameters {
+  scaledWidth: number;
+  scaledHeight: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+interface Coordinates {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /**
  * ObjectRecognition component handles the recognition of objects in images using
  * various ML models (COCO-SSD from TensorFlow.js or DETR from Hugging Face).
@@ -43,6 +63,218 @@ export default function ObjectRecognition() {
   };
 
   /**
+   * Prepares a canvas with standardized dimensions for model input
+   */
+  function prepareInputCanvas(
+    img: HTMLImageElement,
+    modelId: string
+  ): { canvas: HTMLCanvasElement; offsetX: number; offsetY: number; scale: number } {
+    const standardWidth = modelId === 'coco-ssd' ? 640 : 800;
+    const standardHeight = modelId === 'coco-ssd' ? 480 : 600;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Could not get input canvas context');
+
+    canvas.width = standardWidth;
+    canvas.height = standardHeight;
+
+    const scale = Math.min(standardWidth / img.width, standardHeight / img.height);
+    const scaledWidth = img.width * scale;
+    const scaledHeight = img.height * scale;
+    const offsetX = (standardWidth - scaledWidth) / 2;
+    const offsetY = (standardHeight - scaledHeight) / 2;
+
+    // Clear canvas
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, standardWidth, standardHeight);
+
+    // Draw image with high quality
+    ctx.filter = 'contrast(1.2) brightness(1.1) saturate(1.2)';
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+
+    return { canvas, offsetX, offsetY, scale };
+  }
+
+  /**
+   * Creates and prepares the output canvas for drawing results
+   */
+  function prepareOutputCanvas(img: HTMLImageElement): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get output canvas context');
+    
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  /**
+   * Converts coordinates based on model type and canvas dimensions
+   */
+  function convertCoordinates(
+    recognition: Recognition,
+    modelId: string,
+    canvas: CanvasDimensions,
+    scaling: ScalingParameters
+  ): Coordinates {
+    let [x, y, width, height] = recognition.bbox;
+
+    if (modelId === 'facebook/detr-resnet-50') {
+      const [xmin, ymin, xmax, ymax] = recognition.bbox;
+      return {
+        x: xmin * canvas.width,
+        y: ymin * canvas.height,
+        width: (xmax - xmin) * canvas.width,
+        height: (ymax - ymin) * canvas.height
+      };
+    }
+
+    const scaleX = canvas.width / scaling.scaledWidth;
+    const scaleY = canvas.height / scaling.scaledHeight;
+    return {
+      x: (x - scaling.offsetX) * scaleX,
+      y: (y - scaling.offsetY) * scaleY,
+      width: width * scaleX,
+      height: height * scaleY
+    };
+  }
+
+  /**
+   * Ensures coordinates stay within canvas bounds
+   */
+  function constrainCoordinates(
+    coords: Coordinates,
+    canvas: CanvasDimensions
+  ): Coordinates {
+    return {
+      x: Math.max(0, Math.min(coords.x, canvas.width - coords.width)),
+      y: Math.max(0, Math.min(coords.y, canvas.height - coords.height)),
+      width: Math.min(coords.width, canvas.width - coords.x),
+      height: Math.min(coords.height, canvas.height - coords.y)
+    };
+  }
+
+  /**
+   * Draws the bounding box for a recognition
+   */
+  function drawBoundingBox(
+    ctx: CanvasRenderingContext2D,
+    coords: Coordinates
+  ) {
+    const { x, y, width, height } = coords;
+    
+    ctx.fillStyle = 'rgba(75, 83, 32, 0.1)';
+    ctx.fillRect(x, y, width, height);
+    
+    ctx.strokeStyle = '#4B5320';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(x, y, width, height);
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, width, height);
+  }
+
+  /**
+   * Calculates label position
+   */
+  function calculateLabelPosition(
+    coords: Coordinates,
+    labelDimensions: { width: number; height: number },
+    canvas: CanvasDimensions
+  ): { x: number; y: number } {
+    const padding = 8;
+    let labelX = coords.x;
+    let labelY = coords.y > labelDimensions.height + padding ? 
+      coords.y - labelDimensions.height - padding : 
+      coords.y + coords.height + padding;
+
+    return {
+      x: Math.max(0, Math.min(labelX, canvas.width - labelDimensions.width)),
+      y: Math.max(labelDimensions.height, Math.min(labelY, canvas.height - padding))
+    };
+  }
+
+  /**
+   * Draws the label for a recognition
+   */
+  function drawLabel(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    position: { x: number; y: number },
+    width: number,
+    height: number
+  ) {
+    const padding = 8;
+    
+    // Draw background
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+
+    const gradient = ctx.createLinearGradient(
+      position.x, 
+      position.y, 
+      position.x + width, 
+      position.y
+    );
+    gradient.addColorStop(0, '#4B5320');
+    gradient.addColorStop(1, '#5B6330');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(position.x, position.y - height, width, height, 6);
+    ctx.fill();
+
+    // Draw text
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, position.x + padding, position.y - height/2);
+  }
+
+  /**
+   * Draws a single recognition result on the canvas
+   */
+  function drawRecognitionResult(
+    ctx: CanvasRenderingContext2D,
+    recognition: Recognition,
+    canvas: CanvasDimensions,
+    modelId: string,
+    scaling: ScalingParameters
+  ) {
+    // Convert and constrain coordinates
+    const coords = convertCoordinates(recognition, modelId, canvas, scaling);
+    const boundedCoords = constrainCoordinates(coords, canvas);
+
+    // Draw bounding box
+    drawBoundingBox(ctx, boundedCoords);
+
+    // Prepare and draw label
+    const label = `${recognition.class} ${(recognition.score * 100).toFixed(1)}%`;
+    ctx.font = 'bold 14px Inter, sans-serif';
+    const padding = 8;
+    const labelDimensions = {
+      width: ctx.measureText(label).width + (padding * 2),
+      height: 28
+    };
+
+    const labelPosition = calculateLabelPosition(
+      boundedCoords,
+      labelDimensions,
+      canvas
+    );
+
+    drawLabel(ctx, label, labelPosition, labelDimensions.width, labelDimensions.height);
+  }
+
+  /**
    * Processes the selected image for object recognition
    */
   const processImage = async () => {
@@ -55,7 +287,6 @@ export default function ObjectRecognition() {
     setHasNoRecognitions(false);
 
     try {
-      // Load and prepare the image
       const img = new Image();
       img.src = image;
       await new Promise((resolve, reject) => {
@@ -63,97 +294,15 @@ export default function ObjectRecognition() {
         img.onerror = reject;
       });
 
-      // Create input canvas for model processing
-      const inputCanvas = document.createElement('canvas');
-      const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
-      if (!inputCtx) throw new Error('Could not get input canvas context');
-
-      // Set standard dimensions for model input
-      const standardWidth = selectedModel.id === 'coco-ssd' ? 640 : 800; // Adjust size based on model
-      const standardHeight = selectedModel.id === 'coco-ssd' ? 480 : 600;
-      inputCanvas.width = standardWidth;
-      inputCanvas.height = standardHeight;
-
-      // Draw image maintaining aspect ratio
-      const scale = Math.min(standardWidth / img.width, standardHeight / img.height);
-      const scaledWidth = img.width * scale;
-      const scaledHeight = img.height * scale;
-      const offsetX = (standardWidth - scaledWidth) / 2;
-      const offsetY = (standardHeight - scaledHeight) / 2;
-
-      // Apply image preprocessing
-      inputCtx.filter = 'contrast(1.2) brightness(1.1) saturate(1.2)'; // Enhanced color processing
-      inputCtx.imageSmoothingEnabled = true;
-      inputCtx.imageSmoothingQuality = 'high';
-
-      // Clear and draw centered image
-      inputCtx.fillStyle = '#000000';
-      inputCtx.fillRect(0, 0, standardWidth, standardHeight);
-      inputCtx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
-
-      // Apply advanced image processing
-      const imageData = inputCtx.getImageData(0, 0, standardWidth, standardHeight);
-      const data = imageData.data;
-      
-      // Enhanced image processing
-      for (let i = 0; i < data.length; i += 4) {
-        // Adaptive contrast enhancement
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Calculate luminance
-        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-        
-        // Adaptive contrast factor based on luminance
-        const contrastFactor = luminance < 128 ? 1.3 : 1.1;
-        
-        // Apply contrast enhancement
-        data[i] = Math.min(255, Math.max(0, ((r - 128) * contrastFactor) + 128));     // R
-        data[i + 1] = Math.min(255, Math.max(0, ((g - 128) * contrastFactor) + 128)); // G
-        data[i + 2] = Math.min(255, Math.max(0, ((b - 128) * contrastFactor) + 128)); // B
-        
-        // Edge enhancement
-        if (i > 0 && i < data.length - 4) {
-          const prevLuminance = 0.299 * data[i - 4] + 0.587 * data[i - 3] + 0.114 * data[i - 2];
-          if (Math.abs(luminance - prevLuminance) > 20) {
-            // Enhance edges
-            data[i] = Math.min(255, data[i] * 1.2);
-            data[i + 1] = Math.min(255, data[i + 1] * 1.2);
-            data[i + 2] = Math.min(255, data[i + 2] * 1.2);
-          }
-        }
-      }
-
-      inputCtx.putImageData(imageData, 0, 0);
-
-      // Apply sharpening filter
-      inputCtx.filter = 'sharpen(1) contrast(1.1) brightness(1.05)';
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = standardWidth;
-      tempCanvas.height = standardHeight;
-      const tempCtx = tempCanvas.getContext('2d');
-      if (!tempCtx) throw new Error('Could not get temp canvas context');
-      tempCtx.drawImage(inputCanvas, 0, 0);
-      inputCtx.drawImage(tempCanvas, 0, 0);
-
-      // Create output canvas for final result
-      const outputCanvas = document.createElement('canvas');
-      outputCanvas.width = img.naturalWidth;
-      outputCanvas.height = img.naturalHeight;
+      const { canvas: inputCanvas, offsetX, offsetY, scale } = prepareInputCanvas(img, selectedModel.id);
+      const outputCanvas = prepareOutputCanvas(img);
       const outputCtx = outputCanvas.getContext('2d');
       if (!outputCtx) throw new Error('Could not get output canvas context');
 
-      // Draw original image on output canvas
-      outputCtx.drawImage(img, 0, 0, outputCanvas.width, outputCanvas.height);
-
-      // Get recognitions from ML model using the standardized input
       const modelInput = selectedModel.id === 'coco-ssd' ? 
-        // Convert canvas to image for COCO-SSD
         Object.assign(new Image(), { src: inputCanvas.toDataURL() }) : 
         img;
 
-      // Wait for the input image to load if we created a new one
       if (selectedModel.id === 'coco-ssd') {
         await new Promise((resolve, reject) => {
           modelInput.onload = resolve;
@@ -178,86 +327,29 @@ export default function ObjectRecognition() {
         return;
       }
 
-      setRecognitions(typedResults);
-
-      // Draw recognitions with improved visuals
       typedResults.forEach(recognition => {
-        let [x, y, width, height] = recognition.bbox;
-
-        if (selectedModel.id === 'facebook/detr-resnet-50') {
-          // DETR returns coordinates as [xmin, ymin, xmax, ymax] in relative format
-          const [xmin, ymin, xmax, ymax] = recognition.bbox;
-          x = xmin * outputCanvas.width;
-          y = ymin * outputCanvas.height;
-          width = (xmax - xmin) * outputCanvas.width;
-          height = (ymax - ymin) * outputCanvas.height;
-        } else {
-          // COCO-SSD returns coordinates relative to the standardized input
-          // Convert from input canvas coordinates to output canvas coordinates
-          const scaleX = outputCanvas.width / scaledWidth;
-          const scaleY = outputCanvas.height / scaledHeight;
-          x = (x - offsetX) * scaleX;
-          y = (y - offsetY) * scaleY;
-          width *= scaleX;
-          height *= scaleY;
-        }
-
-        // Ensure coordinates are within canvas bounds
-        x = Math.max(0, Math.min(x, outputCanvas.width - width));
-        y = Math.max(0, Math.min(y, outputCanvas.height - height));
-        width = Math.min(width, outputCanvas.width - x);
-        height = Math.min(height, outputCanvas.height - y);
-
-        // Draw semi-transparent highlight
-        outputCtx.fillStyle = 'rgba(75, 83, 32, 0.1)';
-        outputCtx.fillRect(x, y, width, height);
-
-        // Draw border with double line effect
-        outputCtx.strokeStyle = '#4B5320';
-        outputCtx.lineWidth = 4;
-        outputCtx.strokeRect(x, y, width, height);
-        outputCtx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        outputCtx.lineWidth = 2;
-        outputCtx.strokeRect(x, y, width, height);
-
-        // Prepare label text and styling
-        const label = `${recognition.class} ${(recognition.score * 100).toFixed(1)}%`;
-        outputCtx.font = 'bold 14px Inter, sans-serif';
-        const textMetrics = outputCtx.measureText(label);
-        const padding = 8;
-        const labelWidth = textMetrics.width + (padding * 2);
-        const labelHeight = 28;
+        const canvas = {
+          width: outputCanvas.width,
+          height: outputCanvas.height
+        };
         
-        // Calculate optimal label position
-        let labelX = x;
-        let labelY = y > labelHeight + padding ? y - labelHeight - padding : y + height + padding;
-        
-        // Ensure label stays within canvas bounds
-        labelX = Math.max(0, Math.min(labelX, outputCanvas.width - labelWidth));
-        labelY = Math.max(labelHeight, Math.min(labelY, outputCanvas.height - padding));
+        const scaling = {
+          scaledWidth: scale * img.width,
+          scaledHeight: scale * img.height,
+          offsetX,
+          offsetY
+        };
 
-        // Draw label background with shadow
-        outputCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-        outputCtx.shadowBlur = 8;
-        outputCtx.shadowOffsetX = 0;
-        outputCtx.shadowOffsetY = 2;
-
-        const gradient = outputCtx.createLinearGradient(labelX, labelY, labelX + labelWidth, labelY);
-        gradient.addColorStop(0, '#4B5320');
-        gradient.addColorStop(1, '#5B6330');
-
-        outputCtx.fillStyle = gradient;
-        outputCtx.beginPath();
-        outputCtx.roundRect(labelX, labelY - labelHeight, labelWidth, labelHeight, 6);
-        outputCtx.fill();
-
-        // Draw label text
-        outputCtx.shadowColor = 'transparent';
-        outputCtx.fillStyle = '#FFFFFF';
-        outputCtx.textBaseline = 'middle';
-        outputCtx.fillText(label, labelX + padding, labelY - labelHeight/2);
+        drawRecognitionResult(
+          outputCtx,
+          recognition,
+          canvas,
+          selectedModel.id,
+          scaling
+        );
       });
 
+      setRecognitions(typedResults);
       setProcessedImage(outputCanvas.toDataURL('image/png'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -311,7 +403,7 @@ export default function ObjectRecognition() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 p-2 sm:p-4 h-[calc(100vh-20rem)]">
-        <div className="w-full h-[calc(100vh-24rem)] min-h-[400px] flex flex-col">
+        <div className="w-full h-[calc(100vh-24rem)] min-h-[400px] flex flex-col items-center justify-center">
           <ImageUpload 
             onImageSelect={handleImageSelect}
             processedImage={processedImage}
