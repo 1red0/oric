@@ -50,7 +50,7 @@ export default function ImageUpload({
     }
   };
 
-  const processFile = (file: File) => {
+  const processFile = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       if (e.target?.result) {
@@ -63,7 +63,7 @@ export default function ImageUpload({
       setError('Error reading file');
     };
     reader.readAsDataURL(file);
-  };
+  }, [onImageSelect]);
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     setError(null);

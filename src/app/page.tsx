@@ -7,7 +7,7 @@ const features = [
   {
     name: 'Image Classification',
     description: 'Identify objects, scenes, and concepts in images using state-of-the-art deep learning models from TensorFlow.js and Hugging Face.',
-    details: 'Powered by MobileNet and ResNet-50 models',
+    details: 'Powered by four different models',
     href: '/classification',
     icon: CameraIcon,
     color: 'from-[#4B5320] to-[#5B6330]'
@@ -15,7 +15,7 @@ const features = [
   {
     name: 'Object recognition',
     description: 'Detect and locate multiple objects within images with precise bounding boxes and confidence scores.',
-    details: 'Using COCO-SSD and DETR models',
+    details: 'Using four different models',
     href: '/recognition',
     icon: CubeTransparentIcon,
     color: 'from-[#5B6330] to-[#6B7340]'

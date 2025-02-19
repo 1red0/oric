@@ -1,8 +1,8 @@
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import { HfInference } from '@huggingface/inference';
 import * as tf from '@tensorflow/tfjs';
 import { preprocessImage } from './image-processing';
+import { pipeline } from '@huggingface/transformers';
 
 let mobilenetModel: mobilenet.MobileNet | null = null;
 let cocoSsdModel: cocoSsd.ObjectDetection | null = null;
@@ -10,6 +10,13 @@ let mobilenetLoadingPromise: Promise<mobilenet.MobileNet> | null = null;
 let cocoSsdLoadingPromise: Promise<cocoSsd.ObjectDetection> | null = null;
 let backendInitialized = false;
 let isModelLoading = false;
+
+let resnet50Pipeline: any = null;
+let resnet101Pipeline: any = null;
+let mobilevitPipeline: any = null;
+let detrResnet50Pipeline: any = null;
+let detrResnet101Pipeline: any = null;
+let yolosBasePipeline: any = null;
 
 export const models = {
   classification: [
@@ -19,8 +26,18 @@ export const models = {
       provider: 'tensorflow' as const,
     },
     {
-      id: 'microsoft/resnet-50',
-      name: 'ResNet-50 ',
+      id: 'Xenova/resnet-50',
+      name: 'ResNet-50',
+      provider: 'huggingface' as const,
+    },
+    {
+      id: 'Xenova/resnet-101',
+      name: 'ResNet-101',
+      provider: 'huggingface' as const,
+    },
+    {
+      id: 'Xenova/mobilevit-small',
+      name: 'MobileViT',
       provider: 'huggingface' as const,
     },
   ],
@@ -31,8 +48,18 @@ export const models = {
       provider: 'tensorflow' as const,
     },
     {
-      id: 'facebook/detr-resnet-50',
-      name: 'DETR ',
+      id: 'Xenova/detr-resnet-50',
+      name: 'DETR ResNet-50',
+      provider: 'huggingface' as const,
+    },
+    {
+      id: 'Xenova/detr-resnet-101',
+      name: 'DETR ResNet-101',
+      provider: 'huggingface' as const,
+    },
+    {
+      id: 'Xenova/yolos-base',
+      name: 'YOLOS Base',
       provider: 'huggingface' as const,
     },
   ],
@@ -102,14 +129,45 @@ async function loadCocoSsd(): Promise<cocoSsd.ObjectDetection> {
   return cocoSsdModel;
 }
 
-export async function classifyImage(
-  modelId: string,
-  image: HTMLImageElement,
-  hfToken?: string
-) {
+const pipelineMap = {
+  'Xenova/resnet-50': () => resnet50Pipeline,
+  'Xenova/resnet-101': () => resnet101Pipeline,
+  'Xenova/mobilevit-small': () => mobilevitPipeline,
+  'Xenova/detr-resnet-50': () => detrResnet50Pipeline,
+  'Xenova/detr-resnet-101': () => detrResnet101Pipeline,
+  'Xenova/yolos-base': () => yolosBasePipeline,
+} as const;
+
+async function loadPipeline(task: 'image-classification' | 'object-detection', modelId: string) {
+  const getPipeline = pipelineMap[modelId as keyof typeof pipelineMap];
+  if (!getPipeline) {
+    throw new Error(`Unsupported model: ${modelId}`);
+  }
+
+  let pipelineRef = getPipeline();
+  if (!pipelineRef) {
+    pipelineRef = await pipeline(task, modelId);
+    switch (modelId) {
+      case 'Xenova/resnet-50': resnet50Pipeline = pipelineRef; break;
+      case 'Xenova/resnet-101': resnet101Pipeline = pipelineRef; break;
+      case 'Xenova/mobilevit-small': mobilevitPipeline = pipelineRef; break;
+      case 'Xenova/detr-resnet-50': detrResnet50Pipeline = pipelineRef; break;
+      case 'Xenova/detr-resnet-101': detrResnet101Pipeline = pipelineRef; break;
+      case 'Xenova/yolos-base': yolosBasePipeline = pipelineRef; break;
+    }
+  }
+  return pipelineRef;
+}
+
+export async function classifyImage(modelId: string, imageData: string): Promise<Array<{ label: string; score: number }>> {
+  if (isModelLoading) {
+    throw new Error('Another recognition is in progress. Please wait.');
+  }
+
   try {
-    // Pre-process image with classification-specific enhancements
-    const processedImage = await preprocessImage(image, {
+    isModelLoading = true;
+    const img = await createImageFromDataUrl(imageData);
+    const processedImage = await preprocessImage(img, {
       maxSize: 1024,
       minSize: 224,
       quality: 0.9,
@@ -121,99 +179,80 @@ export async function classifyImage(
 
     if (modelId === 'mobilenet') {
       const model = await loadMobilenet();
-      return await model.classify(processedImage.element);
-    } else if (modelId === 'microsoft/resnet-50') {
-      if (!hfToken) throw new Error('Hugging Face token is required');
-      const hf = new HfInference(hfToken);
-      const response = await hf.imageClassification({
-        model: modelId,
-        data: processedImage.dataUrl,
-      });
-      return response.map(({ label, score }) => ({
-        className: label,
-        probability: score,
+      const results = await model.classify(processedImage.element);
+      return results.map(result => ({
+        label: result.className,
+        score: result.probability
+      }));
+    } else {
+      const pipe = await loadPipeline('image-classification', modelId);
+      const results = await pipe(processedImage.dataUrl);
+      return results.map((result: { label: string; score: number }) => ({
+        label: result.label,
+        score: result.score
       }));
     }
-    throw new Error(`Unsupported model: ${modelId}`);
   } catch (error) {
     throw new Error(`Classification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    isModelLoading = false;
   }
 }
 
-async function detectWithCocoSsd(processedImage: { element: HTMLImageElement }) {
-  const model = await loadCocoSsd();
-  const results = await model.detect(processedImage.element);
-  return results.filter(result => result.score > 0.35);
-}
-
-async function detectWithHuggingFace(
-  modelId: string,
-  processedImage: { dataUrl: string },
-  hfToken: string
-) {
-  if (!hfToken?.trim() || !hfToken.startsWith('hf_')) {
-    throw new Error('Invalid Hugging Face token format. Token should start with "hf_".');
-  }
-
-  const hf = new HfInference(hfToken);
-  const response = await hf.objectDetection({
-    model: modelId,
-    data: processedImage.dataUrl,
-  });
-
-  if (!response || !Array.isArray(response)) {
-    throw new Error('Invalid response from Hugging Face API');
-  }
-
-  return response
-    .filter(det => det.score > 0.35)
-    .map(({ label, score, box }) => ({
-      class: label,
-      score,
-      bbox: [box.xmin, box.ymin, box.xmax - box.xmin, box.ymax - box.ymin],
-    }));
-}
-
-export async function detectObjects(
-  modelId: string,
-  image: HTMLImageElement,
-  hfToken?: string
-) {
+export async function detectObjects(modelId: string, imageData: string): Promise<Array<{ bbox: number[]; class: string; score: number }>> {
   if (isModelLoading) {
     throw new Error('Another recognition is in progress. Please wait.');
   }
 
   try {
     isModelLoading = true;
-    const processedImage = await preprocessImage(image, {
+    const img = await createImageFromDataUrl(imageData);
+    const processedImage = await preprocessImage(img, {
       maxSize: 1024,
       minSize: 224,
       quality: 0.9,
       task: 'detection',
       enhanceContrast: true,
       denoise: true,
-      sharpen: true,
-      provider: modelId.includes('facebook/') || modelId.includes('microsoft/') ? 'huggingface' : undefined
+      sharpen: true
     });
 
     if (modelId === 'coco-ssd') {
-      return await detectWithCocoSsd(processedImage);
-    } 
-    
-    if (modelId === 'facebook/detr-resnet-50') {
-      if (!hfToken) {
-        throw new Error('Hugging Face token is missing. Please check your .env.local file.');
-      }
-      return await detectWithHuggingFace(modelId, processedImage, hfToken);
+      const model = await loadCocoSsd();
+      const results = await model.detect(processedImage.element);
+      return results
+        .filter(result => result.score > 0.35)
+        .map(result => ({
+          bbox: [result.bbox[0], result.bbox[1], result.bbox[2], result.bbox[3]],
+          class: result.class,
+          score: result.score
+        }));
+    } else {
+      const pipe = await loadPipeline('object-detection', modelId);
+      const results = await pipe(processedImage.dataUrl);
+      return results
+        .filter((det: any) => det.score > 0.35)
+        .map((result: { box: { xmin: number; ymin: number; xmax: number; ymax: number }; label: string; score: number }) => ({
+          bbox: [result.box.xmin, result.box.ymin, result.box.xmax, result.box.ymax],
+          class: result.label,
+          score: result.score
+        }));
     }
-
-    throw new Error(`Unsupported model: ${modelId}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Object recognition failed: ${errorMessage}`);
   } finally {
     isModelLoading = false;
   }
+}
+
+async function createImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
 }
 
 export function drawRecognitions(

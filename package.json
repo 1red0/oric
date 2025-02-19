@@ -12,14 +12,17 @@
     "@headlessui/react": "^2.2.0",
     "@heroicons/react": "^2.2.0",
     "@huggingface/inference": "^3.3.4",
+    "@huggingface/transformers": "^3.3.3",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow-models/mobilenet": "^2.1.1",
-    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs": "^4.17.0",
     "framer-motion": "^12.4.3",
     "next": "15.1.7",
+    "onnxruntime-node": "^1.20.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-dropzone": "^14.3.5"
+    "react-dropzone": "^14.3.5",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -31,5 +34,13 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "protobufjs"
+    ],
+    "onlyBuiltDependencies": [
+      "protobufjs"
+    ]
   }
 }

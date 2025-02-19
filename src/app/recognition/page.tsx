@@ -12,7 +12,7 @@ import Link from 'next/link';
  * Interface for recognition results
  */
 interface Recognition {
-  bbox: [number, number, number, number];
+  bbox: number[];
   class: string;
   score: number;
 }
@@ -114,6 +114,85 @@ export default function ObjectRecognition() {
   }
 
   /**
+   * Processes the selected image for object recognition
+   */
+  const processImage = async () => {
+    if (!image) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setRecognitions(null);
+    setProcessedImage(null);
+    setHasNoRecognitions(false);
+
+    try {
+      // Create and load the image first
+      const img = new Image();
+      img.src = image;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      // Prepare input canvas with proper scaling
+      const { canvas: inputCanvas, offsetX, offsetY, scale } = prepareInputCanvas(img, selectedModel.id);
+      const outputCanvas = prepareOutputCanvas(img);
+      const outputCtx = outputCanvas.getContext('2d');
+      if (!outputCtx) throw new Error('Could not get output canvas context');
+
+      // Use the appropriate input for each model type
+      const modelInput = selectedModel.id === 'coco-ssd' ? 
+        inputCanvas.toDataURL() : 
+        image;
+
+      const results = await detectObjects(
+        selectedModel.id,
+        modelInput
+      );
+
+      if (!results || results.length === 0) {
+        setHasNoRecognitions(true);
+        setError('No objects detected. Try another image or a different model.');
+        return;
+      }
+
+      setRecognitions(results);
+
+      // Draw original image on output canvas
+      outputCtx.drawImage(img, 0, 0, outputCanvas.width, outputCanvas.height);
+
+      // Draw each recognition
+      results.forEach(recognition => {
+        const canvasDimensions = {
+          width: outputCanvas.width,
+          height: outputCanvas.height
+        };
+
+        const scaling = {
+          scaledWidth: img.width * scale,
+          scaledHeight: img.height * scale,
+          offsetX,
+          offsetY
+        };
+
+        drawRecognitionResult(
+          outputCtx,
+          recognition,
+          canvasDimensions,
+          selectedModel.id,
+          scaling
+        );
+      });
+
+      setProcessedImage(outputCanvas.toDataURL('image/png'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  /**
    * Converts coordinates based on model type and canvas dimensions
    */
   function convertCoordinates(
@@ -122,41 +201,33 @@ export default function ObjectRecognition() {
     canvas: CanvasDimensions,
     scaling: ScalingParameters
   ): Coordinates {
-    const [x, y, width, height] = recognition.bbox;
-
-    if (modelId === 'facebook/detr-resnet-50') {
+    if (modelId.includes('detr') || modelId.includes('yolos')) {
+      // Hugging Face models return [xmin, ymin, xmax, ymax] coordinates
       const [xmin, ymin, xmax, ymax] = recognition.bbox;
+      
+      // Convert from absolute coordinates to relative canvas coordinates
+      const scaleX = canvas.width / scaling.scaledWidth;
+      const scaleY = canvas.height / scaling.scaledHeight;
+      
       return {
-        x: xmin * canvas.width,
-        y: ymin * canvas.height,
-        width: (xmax - xmin) * canvas.width,
-        height: (ymax - ymin) * canvas.height
+        x: xmin * scaleX,
+        y: ymin * scaleY,
+        width: (xmax - xmin) * scaleX,
+        height: (ymax - ymin) * scaleY
+      };
+    } else {
+      // COCO-SSD returns [x, y, width, height] coordinates
+      const [x, y, width, height] = recognition.bbox;
+      const scaleX = canvas.width / scaling.scaledWidth;
+      const scaleY = canvas.height / scaling.scaledHeight;
+      
+      return {
+        x: (x - scaling.offsetX) * scaleX,
+        y: (y - scaling.offsetY) * scaleY,
+        width: width * scaleX,
+        height: height * scaleY
       };
     }
-
-    const scaleX = canvas.width / scaling.scaledWidth;
-    const scaleY = canvas.height / scaling.scaledHeight;
-    return {
-      x: (x - scaling.offsetX) * scaleX,
-      y: (y - scaling.offsetY) * scaleY,
-      width: width * scaleX,
-      height: height * scaleY
-    };
-  }
-
-  /**
-   * Ensures coordinates stay within canvas bounds
-   */
-  function constrainCoordinates(
-    coords: Coordinates,
-    canvas: CanvasDimensions
-  ): Coordinates {
-    return {
-      x: Math.max(0, Math.min(coords.x, canvas.width - coords.width)),
-      y: Math.max(0, Math.min(coords.y, canvas.height - coords.height)),
-      width: Math.min(coords.width, canvas.width - coords.x),
-      height: Math.min(coords.height, canvas.height - coords.y)
-    };
   }
 
   /**
@@ -212,31 +283,41 @@ export default function ObjectRecognition() {
   ) {
     const padding = 8;
     
+    // Ensure position coordinates are valid numbers
+    const x = Math.max(0, Number.isFinite(position.x) ? position.x : 0);
+    const y = Math.max(0, Number.isFinite(position.y) ? position.y : 0);
+    
     // Draw background
     ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
     ctx.shadowBlur = 8;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 2;
 
-    const gradient = ctx.createLinearGradient(
-      position.x, 
-      position.y, 
-      position.x + width, 
-      position.y
-    );
-    gradient.addColorStop(0, '#4B5320');
-    gradient.addColorStop(1, '#5B6330');
+    try {
+      const gradient = ctx.createLinearGradient(
+        x, 
+        y, 
+        x + width, 
+        y
+      );
+      gradient.addColorStop(0, '#4B5320');
+      gradient.addColorStop(1, '#5B6330');
+      ctx.fillStyle = gradient;
+    } catch (error) {
+      // Fallback to solid color if gradient creation fails
+      console.error('Error creating gradient: ', error);
+      ctx.fillStyle = '#4B5320';
+    }
 
-    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.roundRect(position.x, position.y - height, width, height, 6);
+    ctx.roundRect(x, y - height, width, height, 6);
     ctx.fill();
 
     // Draw text
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = '#FFFFFF';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, position.x + padding, position.y - height/2);
+    ctx.fillText(text, x + padding, y - height/2);
   }
 
   /**
@@ -245,19 +326,14 @@ export default function ObjectRecognition() {
   function drawRecognitionResult(
     ctx: CanvasRenderingContext2D,
     recognition: Recognition,
-    canvas: CanvasDimensions,
+    canvasDimensions: CanvasDimensions,
     modelId: string,
     scaling: ScalingParameters
   ) {
-    // Convert and constrain coordinates
-    const coords = convertCoordinates(recognition, modelId, canvas, scaling);
-    const boundedCoords = constrainCoordinates(coords, canvas);
-
-    // Draw bounding box
-    drawBoundingBox(ctx, boundedCoords);
-
-    // Prepare and draw label
+    const coords = convertCoordinates(recognition, modelId, canvasDimensions, scaling);
     const label = `${recognition.class} ${(recognition.score * 100).toFixed(1)}%`;
+    
+    // Set font for measuring and drawing
     ctx.font = 'bold 14px Inter, sans-serif';
     const padding = 8;
     const labelDimensions = {
@@ -265,98 +341,19 @@ export default function ObjectRecognition() {
       height: 28
     };
 
+    // Draw bounding box
+    drawBoundingBox(ctx, coords);
+
+    // Calculate label position
     const labelPosition = calculateLabelPosition(
-      boundedCoords,
+      coords,
       labelDimensions,
-      canvas
+      canvasDimensions
     );
 
+    // Draw label background and text
     drawLabel(ctx, label, labelPosition, labelDimensions.width, labelDimensions.height);
   }
-
-  /**
-   * Processes the selected image for object recognition
-   */
-  const processImage = async () => {
-    if (!image) return;
-
-    setIsProcessing(true);
-    setError(null);
-    setRecognitions(null);
-    setProcessedImage(null);
-    setHasNoRecognitions(false);
-
-    try {
-      const img = new Image();
-      img.src = image;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
-      const { canvas: inputCanvas, offsetX, offsetY, scale } = prepareInputCanvas(img, selectedModel.id);
-      const outputCanvas = prepareOutputCanvas(img);
-      const outputCtx = outputCanvas.getContext('2d');
-      if (!outputCtx) throw new Error('Could not get output canvas context');
-
-      const modelInput = selectedModel.id === 'coco-ssd' ? 
-        Object.assign(new Image(), { src: inputCanvas.toDataURL() }) : 
-        img;
-
-      if (selectedModel.id === 'coco-ssd') {
-        await new Promise((resolve, reject) => {
-          modelInput.onload = resolve;
-          modelInput.onerror = reject;
-        });
-      }
-
-      const results = await detectObjects(
-        selectedModel.id,
-        modelInput,
-        process.env.NEXT_PUBLIC_HF_TOKEN
-      );
-
-      const typedResults = results.map(result => ({
-        ...result,
-        bbox: result.bbox as [number, number, number, number]
-      }));
-
-      if (typedResults.length === 0) {
-        setHasNoRecognitions(true);
-        setError('No objects detected in the image. Try another image or a different model.');
-        return;
-      }
-
-      typedResults.forEach(recognition => {
-        const canvas = {
-          width: outputCanvas.width,
-          height: outputCanvas.height
-        };
-        
-        const scaling = {
-          scaledWidth: scale * img.width,
-          scaledHeight: scale * img.height,
-          offsetX,
-          offsetY
-        };
-
-        drawRecognitionResult(
-          outputCtx,
-          recognition,
-          canvas,
-          selectedModel.id,
-          scaling
-        );
-      });
-
-      setRecognitions(typedResults);
-      setProcessedImage(outputCanvas.toDataURL('image/png'));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   /**
    * Handles downloading the processed image

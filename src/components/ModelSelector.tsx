@@ -81,7 +81,7 @@ function ModelSelector({
               leaveFrom="opacity-100"
               leaveTo="opacity-0"
             >
-              <ListboxOptions className="absolute z-[100] mt-2 max-h-60 w-full overflow-auto rounded-lg bg-white py-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
+              <ListboxOptions className="absolute z-[100] mt-2 max-h-28 w-full overflow-auto rounded-lg bg-white py-2 text-base shadow-lg ring-1 ring-black/5 focus:outline-none">
                 {models.map((model) => (
                   <ListboxOption
                     key={model.id}

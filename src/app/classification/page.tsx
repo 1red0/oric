@@ -44,7 +44,7 @@ export default function ImageClassification() {
    * Processes the selected image for classification
    */
   const processImage = async () => {
-    if (!image || !imageRef.current) return;
+    if (!image) return;
 
     setIsProcessing(true);
     setError(null);
@@ -54,8 +54,7 @@ export default function ImageClassification() {
     try {
       const results = await classifyImage(
         selectedModel.id,
-        imageRef.current,
-        process.env.NEXT_PUBLIC_HF_TOKEN
+        image
       );
 
       if (!results || results.length === 0) {
@@ -64,7 +63,10 @@ export default function ImageClassification() {
         return;
       }
 
-      setPredictions(results);
+      setPredictions(results.map(result => ({
+        className: result.label,
+        probability: result.score
+      })));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
