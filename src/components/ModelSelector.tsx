@@ -15,6 +15,7 @@ interface ModelSelectorProps {
   readonly models: readonly Model[];
   readonly selectedModel: Model;
   readonly onModelChange: (model: Model) => void;
+  readonly disabled?: boolean;
 }
 
 const ModelOption = memo(({ 
@@ -57,19 +58,22 @@ function ModelSelector({
   models,
   selectedModel,
   onModelChange,
+  disabled = false
 }: ModelSelectorProps): ReactElement {
   return (
     <div className="w-full min-w-[300px] relative z-[100]">
-      <Listbox value={selectedModel} onChange={onModelChange}>
+      <Listbox value={selectedModel} onChange={onModelChange} disabled={disabled}>
         {({ open }) => (
           <div className="relative mt-1">
-            <ListboxButton className="relative w-full cursor-default rounded-lg bg-white py-3 pl-4 pr-10 text-left border-2 border-gray-200 hover:border-[#4B5320] focus:outline-none focus-visible:border-[#4B5320] focus-visible:ring-2 focus-visible:ring-[#4B5320]/20 transition-all duration-200 shadow-sm hover:shadow-md">
+            <ListboxButton className={`relative w-full cursor-default rounded-lg bg-white py-3 pl-4 pr-10 text-left border-2 ${
+              disabled ? 'border-gray-200 opacity-70 cursor-not-allowed' : 'border-gray-200 hover:border-[#4B5320] focus:outline-none focus-visible:border-[#4B5320] focus-visible:ring-2 focus-visible:ring-[#4B5320]/20'
+            } transition-all duration-200 shadow-sm hover:shadow-md`}>
               <span className="block truncate text-base font-medium text-gray-900">
                 {selectedModel.name}
               </span>
               <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
                 <ChevronUpDownIcon
-                  className="h-6 w-6 text-[#4B5320]"
+                  className={`h-6 w-6 ${disabled ? 'text-gray-400' : 'text-[#4B5320]'}`}
                   aria-hidden="true"
                 />
               </span>
@@ -86,7 +90,9 @@ function ModelSelector({
                   <ListboxOption
                     key={model.id}
                     value={model}
-                    className="relative cursor-pointer transition-colors duration-150"
+                    className={`relative cursor-pointer transition-colors duration-150 ${
+                      disabled ? 'cursor-not-allowed' : ''
+                    }`}
                   >
                     {({ selected }) => (
                       <ModelOption

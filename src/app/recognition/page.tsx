@@ -395,6 +395,7 @@ export default function ObjectRecognition() {
             models={models.recognition}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
+            disabled={!!image}
           />
         </div>
       </div>

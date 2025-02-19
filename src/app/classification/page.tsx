@@ -100,6 +100,7 @@ export default function ImageClassification() {
             models={models.classification}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
+            disabled={!!image}
           />
         </div>
       </div>
