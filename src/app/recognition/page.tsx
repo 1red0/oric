@@ -122,7 +122,7 @@ export default function ObjectRecognition() {
     canvas: CanvasDimensions,
     scaling: ScalingParameters
   ): Coordinates {
-    let [x, y, width, height] = recognition.bbox;
+    const [x, y, width, height] = recognition.bbox;
 
     if (modelId === 'facebook/detr-resnet-50') {
       const [xmin, ymin, xmax, ymax] = recognition.bbox;
@@ -189,8 +189,8 @@ export default function ObjectRecognition() {
     canvas: CanvasDimensions
   ): { x: number; y: number } {
     const padding = 8;
-    let labelX = coords.x;
-    let labelY = coords.y > labelDimensions.height + padding ? 
+    const labelX = coords.x;
+    const labelY = coords.y > labelDimensions.height + padding ? 
       coords.y - labelDimensions.height - padding : 
       coords.y + coords.height + padding;
 

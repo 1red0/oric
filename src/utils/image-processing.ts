@@ -219,41 +219,6 @@ function applyAdaptiveContrast(
   return result;
 }
 
-function applyEdgeDetection(
-  grayscale: Uint8ClampedArray,
-  width: number,
-  height: number
-): Uint8ClampedArray {
-  const sobelX = [
-    [-1, 0, 1],
-    [-2, 0, 2],
-    [-1, 0, 1]
-  ];
-  const sobelY = [
-    [-1, -2, -1],
-    [0, 0, 0],
-    [1, 2, 1]
-  ];
-  const temp = new Uint8ClampedArray(grayscale);
-  const result = new Uint8ClampedArray(grayscale);
-
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      let gx = 0, gy = 0;
-      for (let ky = 0; ky < 3; ky++) {
-        for (let kx = 0; kx < 3; kx++) {
-          const val = temp[(y + ky - 1) * width + (x + kx - 1)];
-          gx += val * sobelX[ky][kx];
-          gy += val * sobelY[ky][kx];
-        }
-      }
-      const magnitude = Math.sqrt(gx * gx + gy * gy);
-      result[y * width + x] = Math.min(255, magnitude);
-    }
-  }
-  return result;
-}
-
 function applyEnhancedGrayscale(
   data: Uint8ClampedArray,
   grayscale: Uint8ClampedArray
@@ -342,7 +307,12 @@ export async function preprocessImage(
       }
 
       // For Hugging Face models, use their preferred input size
-      const maxSize = isHuggingFace ? 800 : (isDetection ? Math.min(640, processOptions.maxSize) : processOptions.maxSize);
+      let maxSize = processOptions.maxSize;
+      if (isHuggingFace) {
+        maxSize = 800;
+      } else if (isDetection) {
+        maxSize = Math.min(640, processOptions.maxSize);
+      }
 
       // Scale down if image is too large
       if (width > maxSize || height > maxSize) {
@@ -370,8 +340,11 @@ export async function preprocessImage(
       applyImageFilters(ctx, width, height, processOptions);
 
       // Convert to desired format with appropriate quality
-      const quality = isHuggingFace ? 1.0 : (isDetection ? 1.0 : processOptions.quality); // Use max quality for Hugging Face
-      const format = isHuggingFace ? 'image/png' : processOptions.format; // Use PNG for Hugging Face
+      let quality = processOptions.quality;
+      if (isHuggingFace || isDetection) {
+        quality = 1.0;
+      }
+      const format = isHuggingFace ? 'image/png' : processOptions.format;
       const dataUrl = canvas.toDataURL(format, quality);
 
       // Create new image with processed data
