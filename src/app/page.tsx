@@ -5,20 +5,22 @@ import { CameraIcon, CubeTransparentIcon } from '@heroicons/react/24/outline';
 
 const features = [
   {
-    name: 'Image Classification',
-    description: 'Identify objects, scenes, and concepts in images using state-of-the-art deep learning models from TensorFlow.js and Hugging Face.',
-    details: '4 models available',
-    href: '/classification',
-    icon: CameraIcon,
-    color: 'from-[#4B5320] to-[#5B6330]'
-  },
-  {
     name: 'Object recognition',
-    description: 'Detect and locate multiple objects within images with precise bounding boxes and confidence scores.',
-    details: '4 models available',
+    description: 'Detect and locate multiple objects within images with bounding boxes and confidence scores.',
+    details: '4 models available:',
+    models: 'COCO-SSD, DETR ResNet-50, DETR ResNet-101, Yolos Tiny',
     href: '/recognition',
     icon: CubeTransparentIcon,
     color: 'from-[#5B6330] to-[#6B7340]'
+  },
+  {
+    name: 'Image Classification',
+    description: 'Identify objects, scenes, and concepts in images with a confidence scores.',
+    details: '4 models available:',
+    models: 'MobileNet, ResNet-50, ResNet-101, ResNet-152',
+    href: '/classification',
+    icon: CameraIcon,
+    color: 'from-[#4B5320] to-[#5B6330]'
   }
 ];
 
@@ -48,13 +50,21 @@ export default function Home() {
             Object Recognition & Image Classification
           </motion.p>
           <motion.p 
-            className="text-lg text-gray-600 max-w-3xl mx-auto"
+            className="text-2xl font-light text-gray-600 mb-4"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
+            Using machine learning
+          </motion.p>          
+          <motion.p 
+            className="text-lg text-gray-600 max-w-3xl mx-auto"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
             A modern web application demonstrating the power of computer vision using TensorFlow.js and Hugging Face models. 
-            Process images directly in your browser with state-of-the-art deep learning models.
+            Process images directly in your browser with a variety of different models.
           </motion.p>
         </motion.div>
 
@@ -84,12 +94,15 @@ export default function Home() {
                     <h2 className="text-2xl font-semibold text-white mb-4">
                       {feature.name}
                     </h2>
-                    <p className="text-lg text-gray-100 mb-4">
+                    <p className="text-lg text-gray-100 mb-6">
                       {feature.description}
                     </p>
-                    <p className="text-sm text-gray-200 mb-8">
+                    <p className="text-sm text-gray-200 mb-2">
                       {feature.details}
                     </p>
+                    <p className="text-sm text-gray-200 mb-12">
+                      {feature.models}
+                    </p>                    
                     <div className="absolute bottom-8 right-8">
                       <span className="inline-flex items-center text-white font-medium">
                         Try it now

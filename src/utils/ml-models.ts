@@ -36,8 +36,8 @@ export const models = {
       provider: 'huggingface' as const,
     },
     {
-      id: 'Xenova/mobilevit-small',
-      name: 'MobileViT',
+      id: 'Xenova/resnet-152',
+      name: 'ResNet-152',
       provider: 'huggingface' as const,
     },
   ],
@@ -58,8 +58,8 @@ export const models = {
       provider: 'huggingface' as const,
     },
     {
-      id: 'Xenova/yolos-base',
-      name: 'YOLOS Base',
+      id: 'Xenova/yolos-tiny',
+      name: 'Yolos Tiny',
       provider: 'huggingface' as const,
     },
   ],
@@ -132,10 +132,10 @@ async function loadCocoSsd(): Promise<cocoSsd.ObjectDetection> {
 const pipelineMap = {
   'Xenova/resnet-50': () => resnet50Pipeline,
   'Xenova/resnet-101': () => resnet101Pipeline,
-  'Xenova/mobilevit-small': () => mobilevitPipeline,
+  'Xenova/resnet-152': () => mobilevitPipeline,
   'Xenova/detr-resnet-50': () => detrResnet50Pipeline,
   'Xenova/detr-resnet-101': () => detrResnet101Pipeline,
-  'Xenova/yolos-base': () => yolosBasePipeline,
+  'Xenova/yolos-tiny': () => yolosBasePipeline,
 } as const;
 
 async function loadPipeline(task: 'image-classification' | 'object-detection', modelId: string) {
@@ -150,10 +150,10 @@ async function loadPipeline(task: 'image-classification' | 'object-detection', m
     switch (modelId) {
       case 'Xenova/resnet-50': resnet50Pipeline = pipelineRef; break;
       case 'Xenova/resnet-101': resnet101Pipeline = pipelineRef; break;
-      case 'Xenova/mobilevit-small': mobilevitPipeline = pipelineRef; break;
+      case 'Xenova/resnet-152': mobilevitPipeline = pipelineRef; break;
       case 'Xenova/detr-resnet-50': detrResnet50Pipeline = pipelineRef; break;
       case 'Xenova/detr-resnet-101': detrResnet101Pipeline = pipelineRef; break;
-      case 'Xenova/yolos-base': yolosBasePipeline = pipelineRef; break;
+      case 'Xenova/yolos-tiny': yolosBasePipeline = pipelineRef; break;
     }
   }
   return pipelineRef;

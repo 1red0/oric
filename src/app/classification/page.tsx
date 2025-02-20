@@ -92,7 +92,7 @@ export default function ImageClassification() {
             </h1>
           </div>
           <p className="mt-2 text-sm text-gray-600">
-            Identify objects and scenes in images using advanced AI models
+            Identify objects and scenes in images
           </p>
         </div>
         <div className="w-full sm:w-auto sm:max-w-md">
@@ -196,7 +196,7 @@ export default function ImageClassification() {
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/80 backdrop-blur-sm shadow-lg rounded-xl overflow-hidden border border-[#4B5320]/10 max-h-[calc(100vh-12rem)] overflow-y-auto"
+                    className="bg-white/80 backdrop-blur-sm shadow-lg rounded-xl overflow-hidden border border-[#4B5320]/10 max-h-[calc(100vh-34rem)] overflow-y-auto"
                   >
                     <div className="p-4 bg-gradient-to-r from-[#4B5320] to-[#5B6330] text-white sticky top-0 z-10">
                       <h3 className="text-lg font-semibold">Classification Results</h3>
