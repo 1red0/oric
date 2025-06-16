@@ -52,12 +52,12 @@ Identify objects, scenes, and concepts in images with detailed confidence scores
 
 ## 🛠️ Technology Stack
 
-- **Frontend Framework**: Next.js 13+ with App Router
+- **Frontend Framework**: Next.js 15+ with App Router
 - **Language**: TypeScript
 - **Machine Learning**: TensorFlow.js
 - **Model Sources**:
-  - Hugging Face Transformers (Object Detection)
-  - TensorFlow Hub & Pre-trained Models (Image Classification)
+  - Hugging Face Transformers
+  - TensorFlow Hub & Pre-trained Models
 - **Styling**: Tailwind CSS
 - **Deployment**: Vercel
 - **Build Tool**: Turbopack (Next.js)
@@ -112,7 +112,7 @@ Identify objects, scenes, and concepts in images with detailed confidence scores
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - pnpm
 
 ### Installation
