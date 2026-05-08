@@ -41,8 +41,6 @@ pipeline {
                 sh '''
                     echo "Deploying ${APP_NAME}..."
 
-                    mkdir -p ${DEPLOY_PATH}
-
                     # Clean previous deployment
                     rm -rf ${DEPLOY_PATH}/*
 
