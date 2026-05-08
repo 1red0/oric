@@ -1,9 +1,11 @@
 pipeline {
-    agent { label 'nodejs' }
+    agent {label 'nodejs'}
 
     stages {
-        stage('Hello') {
+        stage('Check Node Version') {
             steps {
+                sh 'node -v'
+                sh 'npm -v'
                 echo 'Hello'
             }
         }
