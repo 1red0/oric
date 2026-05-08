@@ -4,7 +4,7 @@ pipeline {
     tools {
         nodejs 'nodejs_26.1.0'
     }
-
+    
     environment {
         APP_NAME = 'ORIC'
         DEPLOY_PATH = '/Deployments/ORIC'
@@ -18,15 +18,21 @@ pipeline {
             }
         }
 
+        stage('Install PNPM') {
+            steps {
+                sh 'npm install -g pnpm'
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh 'pnpm install'
             }
         }
 
         stage('Build Next.js') {
             steps {
-                sh 'npm run build'
+                sh 'pnpm build'
             }
         }
 
@@ -40,16 +46,17 @@ pipeline {
                     # Clean previous deployment
                     rm -rf ${DEPLOY_PATH}/*
 
-                    # Copy Next.js build files
+                    # Copy application files
                     cp -r .next ${DEPLOY_PATH}/
                     cp -r public ${DEPLOY_PATH}/ || true
                     cp package.json ${DEPLOY_PATH}/
-                    cp package-lock.json ${DEPLOY_PATH}/ || true
+                    cp pnpm-lock.yaml ${DEPLOY_PATH}/ || true
                     cp next.config.* ${DEPLOY_PATH}/ || true
 
-                    # Install production dependencies
                     cd ${DEPLOY_PATH}
-                    npm install --omit=dev
+
+                    # Install production dependencies
+                    pnpm install --prod
 
                     echo "${APP_NAME} deployed successfully."
                 '''
@@ -61,11 +68,11 @@ pipeline {
                 sh '''
                     cd ${DEPLOY_PATH}
 
-                    # Stop old Next.js instance
+                    # Stop previous instance
                     pkill -f "next start" || true
 
-                    # Start application
-                    nohup npm run start > oric.log 2>&1 &
+                    # Start Next.js app
+                    nohup pnpm start > oric.log 2>&1 &
                 '''
             }
         }
@@ -73,11 +80,11 @@ pipeline {
 
     post {
         success {
-            echo '${APP_NAME} deployment completed successfully.'
+            echo "${APP_NAME} deployment completed successfully."
         }
 
         failure {
-            echo '${APP_NAME} deployment failed.'
+            echo "${APP_NAME} deployment failed."
         }
     }
 }
