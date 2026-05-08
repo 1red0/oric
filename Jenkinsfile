@@ -1,5 +1,5 @@
 pipeline {
-    agent {label 'docker-agent'}
+    agent {label 'docker-agent-jdk25'}
 
     tools {
         nodejs 'nodejs_26.1.0'
