@@ -1,5 +1,9 @@
 pipeline {
-    agent {label 'nodejs'}
+    agent {label 'docker-agent'}
+
+    tools {
+        nodejs 'nodejs_26.1.0'
+    }
 
     stages {
         stage('Check Node Version') {
