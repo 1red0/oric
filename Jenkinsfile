@@ -4,10 +4,10 @@ pipeline {
     tools {
         nodejs 'nodejs_26.1.0'
     }
-    
+
     environment {
         APP_NAME = 'ORIC'
-        DEPLOY_PATH = '/Deployments/ORIC'
+        DEPLOY_PATH = '/var/jenkins_home/deployments/ORIC'
     }
 
     stages {
